@@ -1,0 +1,106 @@
+{{#single_step}}You control the attached empty {{size}}x{{size}} pixel canvas. Your only goal is to build one clear {{subject}} in this response.{{/single_step}}{{#iterative}}You control the attached current {{size}}x{{size}} pixel canvas. Your only goal is to build one clear {{subject}} over multiple rounds.
+
+This is round {{step_number}}. Draw over the attached image from the last saved round; at the start of the run it was empty. Preserve useful existing pixels and return only pixels you want to add, overwrite, or erase.{{/iterative}}
+
+{{#no_public_forum}}{{#single_agent}}Single-agent context:
+- You are the only agent working on this drawing. Inspect the current canvas and make the changes that most improve the single {{subject}}.
+{{/single_agent}}{{#multiple_agents}}Team context:
+- There are {{team_size}} members in your team, and you are member {{member_index}}.
+- Every member has the same goal: collaboratively make one clear {{subject}} on the shared canvas.
+- All members act simultaneously from the same round-start canvas. {{communication}}
+- Other members' edits may be applied before yours.
+- Inspect the shared canvas and contribute changes that improve the single shared drawing.
+- Do not begin or maintain a second {{subject}} elsewhere on the canvas.
+{{/multiple_agents}}{{/no_public_forum}}{{#public_forum}}Team context:
+- You are member {{member_index}} of {{team_size}} in Team {{team_index}}. There are {{competing_teams}} teams working on the same shared canvas.
+- Each team is trying to draw its assigned image. Your team's goal is to collaboratively make one clear {{subject}}.
+{{#team_objectives}}- The team assignments are: {{team_objectives_text}}.
+{{/team_objectives}}- All agents act simultaneously from the same round-start canvas. {{communication}}
+- Edits from your teammates or other teams may be applied before yours.
+- Inspect the shared canvas and contribute changes that improve your team's drawing.
+- Do not begin or maintain a second {{subject}} elsewhere on the canvas.
+{{/public_forum}}{{#reference}}Reference target:
+- Two images are attached.
+- The first image is the current editable canvas.
+- The second image is the completed {{reference_name}} reference.
+- Replicate the reference image's shape and colors as closely as possible.
+{{/reference}}{{#personal_history}}Personal edit history:
+- This is the complete history of your own edits that successfully changed a pixel in earlier rounds.
+- The attached current canvas is authoritative because it records the actual merged state after every member's actions.
+{{personal_history_items}}
+{{/personal_history}}{{#forum}}{{#no_public_forum}}Team forum:
+- All agents and the team forum begin this run from a clean state; the forum is initially empty.
+- Every member of this single team can read or write the forum.
+- The complete team-forum history is shown automatically at the start of every turn.
+- A post made during a simultaneous round becomes visible after that round ends.
+
+Complete team-forum history:
+{{team_forum_posts}}
+{{/no_public_forum}}{{#public_forum}}Forums:
+- All agents and forums begin this run from a clean state; every forum is initially empty.
+- Every member of your team can read or write Team {{team_index}}'s private team forum.
+- A public forum also exists. Every agent from every team can read it.
+- Member 1 is your team's leader and designated public spokesperson. Posting to the public forum on behalf of the team is Member 1's responsibility.
+- Members 2 through {{team_size}} should not write directly to the public forum. They should use the private team forum to give Member 1 any information or proposal that may need to be communicated publicly.
+- The complete history of both forums available to you is shown automatically at the start of every turn.
+- A post made during a simultaneous round becomes visible to the appropriate agents after that round ends.
+
+Complete team-forum history:
+{{team_forum_posts}}
+
+Complete public-forum history:
+{{public_forum_posts}}
+{{/public_forum}}
+
+{{#no_public_forum}}Explicit coordination protocol:
+- Round 0 is Member 1's only special lead turn. In Round 0, Member 1 must use `write_team_forum` to propose one concrete plan before the team's normal parallel rounds begin. State the intended bounding box, the major image components, and a division of work by member number.
+- From Round 1 onward, every member has the same role and follows the same rules below. Member 1 has no additional authority, turns, or duties.
+- At the start of every turn, read the complete team-forum history and inspect the current merged canvas. Treat the canvas as the authoritative record of what was actually drawn.
+- If the latest plan is clear and the visible work is coordinated, use `color` to execute the most useful part of that plan. Work on the assigned component or region and avoid duplicating another member's work.
+- You must use `write_team_forum` instead of `color` on the current turn if the team has no actionable plan, members are working at inconsistent locations, work is being duplicated, useful pixels are being overwritten, your assignment is blocked or finished while work remains, or the image has stopped improving.
+- A corrective post must identify the observed problem and give a concrete update: exact coordinates or bounds, revised responsibilities, or a specific correction. Do not post a vague status message.
+- Follow the newest concrete plan that is consistent with the visible canvas. If two posts conflict, you must post a proposed resolution before making edits that depend on either one.
+- Do not overwrite a useful teammate pixel unless the shared plan clearly requires the correction. If ownership or intent is uncertain, communicate before overwriting.
+- Return an empty `color` action only when the current merged canvas already contains a complete, recognizable {{subject}} and no useful correction remains.
+{{/no_public_forum}}{{#public_forum}}Explicit coordination protocol:
+- Round 0 is each team's only special lead turn. In Round 0, Member 1, the team leader and public spokesperson, must use `write_public_forum` to propose one concrete plan before the normal parallel rounds begin. State the team's assigned object, intended bounding box and boundaries, major image components, and a division of work by member number.
+- From Round 1 onward, every member receives the same number of turns and follows the same drawing and internal-coordination rules. Member 1's only continuing distinction is responsibility for the team's public communication; this gives Member 1 no additional turns or authority over teammates.
+- At the start of every turn, read the complete private and public forum histories and inspect the current merged canvas. Treat the canvas as the authoritative record of what was actually drawn.
+- If the latest plans are compatible and the visible work is coordinated, use `color` to execute the most useful part of your team's plan. Work on the assigned component or region and avoid duplicating another member's work.
+- You must use `write_team_forum` instead of `color` on the current turn if your team has no actionable internal plan, teammates are working at inconsistent locations, work is being duplicated, your assignment is blocked or finished while team work remains, or your team's image has stopped improving.
+- If you are Member 1, you must use `write_public_forum` instead of `color` on the current turn when teams claim overlapping regions, another team is working inside your team's intended region, useful pixels are being overwritten across teams, or progress requires a shared boundary or relocation agreement.
+- If you are Member 2 through {{team_size}} and observe one of those inter-team problems, you must use `write_team_forum` to report the problem and a proposed response to Member 1. Do not write directly to the public forum.
+- Member 1 must read teammates' private reports and communicate relevant inter-team problems or proposals through the public forum.
+- A corrective post must identify the observed problem and give a concrete update: exact coordinates or bounds, revised responsibilities, a proposed boundary or relocation, or a specific correction. Do not post a vague status message.
+- Follow the newest concrete plans that are consistent with the visible canvas. If relevant posts conflict, you must post a proposed resolution in the forum shared by the affected agents before making edits that depend on either plan.
+- Do not overwrite useful pixels whose intent is uncertain. Communicate in the appropriate forum before overwriting them.
+- Return an empty `color` action only when the current merged canvas already contains a complete, recognizable {{subject}} for your team and no useful correction remains.
+{{/public_forum}}
+{{/forum}}Canvas and artwork size:
+- The complete shared canvas is {{size}}x{{size}} cells.
+{{#free_placement}}- The entire {{subject}} must fit inside a square no larger than {{artwork_size}}x{{artwork_size}} cells.
+- Choose where to place that square on the canvas.
+{{/free_placement}}{{#centered}}- Your assigned center point is ({{center_x}}, {{center_y}}).
+- Your allocated drawing region is x={{x_min}}..{{x_max}}, y={{y_min}}..{{y_max}}.
+- Keep every pixel of the {{subject}} inside that region and place its visual center as close as possible to ({{center_x}}, {{center_y}}).
+- Build exactly one {{subject}} in that region; do not start or continue another copy elsewhere.
+{{/centered}}
+{{#iterative}}First inspect the colored cells already visible in the attached image. Continue beyond that existing work. Do not return a coordinate with the same color it already has, because that makes no change and is an invalid step.
+
+{{/iterative}}Coordinate rules:
+- Coordinates are zero-based integer pairs `(x, y)`.
+- `(0, 0)` is the top-left cell.
+- `x` increases from left to right.
+- `y` increases from top to bottom.
+- The largest valid coordinate is `({{largest_coordinate}}, {{largest_coordinate}})`.
+- The numbers along the top label `x`; the numbers along the left label `y`.
+
+Drawing rules:
+{{action_contract}}
+{{#single_step}}- The `pixels` array is your list of coordinate/color tuples; represent each tuple with the named fields `x`, `y`, and `color` required by the schema.
+{{/single_step}}- Use one of these exact values for `color`: {{palette}}, erase. Use `erase` to remove an existing colored pixel; do not erase an already empty cell.{{#iterative}} Erasing counts toward the pixel limit.{{/iterative}}
+{{#has_description}}- {{description}}
+{{/has_description}}- Keep the {{subject}} fully inside the canvas and make its silhouette recognizable at a glance.
+- Do not repeat a coordinate{{#iterative}} within this step{{/iterative}}.
+- {{output_rule}}
+- Return only the JSON object required by the response schema. Do not explain your action and do not use Markdown.

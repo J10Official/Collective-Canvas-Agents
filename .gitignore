@@ -1,0 +1,12 @@
+harness/.env
+harness/runs/
+harness/batches/
+harness/artifacts/
+harness/_video_vendor/
+harness/data/*.json.tmp
+analysis/results/
+__pycache__/
+*.py[cod]
+*.log
+.DS_Store
+Thumbs.db

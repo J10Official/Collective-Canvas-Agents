@@ -1,0 +1,911 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Collective Canvas</title>
+  <style>
+    :root { color-scheme: light; --paper:#f4f1e9; --ink:#292925; --muted:#79776f; --line:#d8d3c7; --panel:#fbfaf6; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--paper); color:var(--ink); font:14px/1.4 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { width:min(98vw,1540px); margin:0 auto; padding:28px 18px 42px; }
+    header { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:16px; }
+    h1 { margin:0; font:600 19px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:-.02em; }
+    #connection { color:var(--muted); font-size:12px; }
+    #connection::before { content:""; display:inline-block; width:7px; height:7px; margin-right:6px; border-radius:50%; background:#b6665b; }
+    #connection.online::before { background:#5b9279; }
+    .workspace { display:grid; grid-template-columns:minmax(300px,1fr) minmax(260px,430px); gap:14px; align-items:start; }
+    .workspace.forums-open { grid-template-columns:minmax(210px,260px) minmax(300px,1fr) minmax(260px,430px); }
+    .canvas-shell { padding:10px; background:var(--panel); border:1px solid var(--line); border-radius:8px; box-shadow:0 8px 30px rgb(63 57 45 / 5%); }
+    canvas { display:block; width:100%; aspect-ratio:1; background:#fffefa; cursor:crosshair; touch-action:none; image-rendering:pixelated; }
+    .sidebar { position:sticky; top:14px; display:flex; flex-direction:column; gap:10px; min-width:0; max-height:calc(100vh - 48px); overflow-y:auto; padding-right:4px; }
+    .forum-bar { position:sticky; top:14px; min-width:0; max-height:calc(100vh - 48px); overflow:hidden; border:1px solid var(--line); border-radius:8px; background:var(--panel); }
+    .forum-bar[hidden] { display:none; }
+    .forum-bar-header { padding:11px 12px; border-bottom:1px solid #e8e4da; font:600 12px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .forum-tabs { display:flex; gap:4px; padding:8px; overflow-x:auto; border-bottom:1px solid #e8e4da; }
+    .forum-tab { flex:0 0 auto; min-height:27px; padding:4px 7px; color:var(--muted); font-size:10px; }
+    .forum-tab.active { color:var(--ink); border-color:var(--ink); }
+    .forum-feed { display:flex; flex-direction:column; gap:7px; min-height:180px; max-height:calc(100vh - 145px); overflow-y:auto; padding:9px; }
+    .forum-empty { color:var(--muted); font-size:11px; }
+    .forum-entry { padding:7px 8px; border:1px solid var(--line); border-radius:6px; background:#fffefa; }
+    .forum-entry-meta { color:var(--muted); font:9px/1.3 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .forum-entry-message { margin-top:4px; white-space:pre-wrap; overflow-wrap:anywhere; font-size:11px; }
+    .panel { flex:0 0 auto; border:1px solid var(--line); border-radius:8px; background:var(--panel); overflow:hidden; }
+    .panel > summary, .model-card > summary { display:flex; justify-content:space-between; align-items:center; padding:11px 13px; cursor:pointer; font:600 12px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace; list-style:none; }
+    .panel > summary::-webkit-details-marker, .model-card > summary::-webkit-details-marker { display:none; }
+    .panel > summary::after, .model-card > summary::after { content:'+'; color:var(--muted); font-weight:400; }
+    .panel[open] > summary::after, .model-card[open] > summary::after { content:'−'; }
+    .panel-body { display:flex; flex-direction:column; gap:10px; padding:0 13px 13px; border-top:1px solid #e8e4da; }
+    .panel-body > :first-child { margin-top:12px; }
+    .tool-row { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+    button { appearance:none; border:1px solid var(--line); border-radius:6px; background:var(--panel); color:var(--ink); min-height:34px; padding:6px 8px; cursor:pointer; font:inherit; }
+    button:hover { border-color:#aaa69d; }
+    button.active { border-color:var(--ink); box-shadow:inset 0 0 0 1px var(--ink); }
+    .palette { display:grid; grid-template-columns:repeat(2,1fr); gap:6px; }
+    .swatch { position:relative; height:38px; padding:0; }
+    .swatch span { display:block; width:18px; height:18px; border-radius:50%; margin:auto; box-shadow:inset 0 0 0 1px rgb(0 0 0 / 12%); }
+    .swatch.active::after { content:""; position:absolute; inset:3px; border:1px solid var(--ink); border-radius:4px; }
+    .clear { color:var(--muted); }
+    .meta { margin-top:10px; color:var(--muted); font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    label.field { display:flex; flex-direction:column; gap:5px; color:var(--muted); font-size:11px; }
+    input, select, textarea { width:100%; border:1px solid var(--line); border-radius:6px; background:#fffefa; color:var(--ink); padding:8px 9px; font:12px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    textarea { min-height:230px; resize:vertical; }
+    textarea.description { min-height:82px; }
+    textarea.prompt-template { min-height:360px; }
+    textarea[readonly] { background:#f8f6ef; color:#66635c; }
+    input:focus, select:focus, textarea:focus { outline:1px solid var(--ink); border-color:var(--ink); }
+    .attachment { display:grid; grid-template-columns:88px 1fr; gap:10px; align-items:center; color:var(--muted); font-size:11px; }
+    .attachment img { width:88px; height:88px; object-fit:contain; border:1px solid var(--line); background:var(--paper); }
+    .attachment[hidden] { display:none; }
+    .model-card { margin-top:1px; border:1px solid var(--line); border-radius:6px; background:#f8f6ef; }
+    .member-configs { display:flex; flex-direction:column; gap:8px; }
+    .model-card > summary { padding:9px 10px; }
+    .model-body { display:flex; flex-direction:column; gap:10px; padding:0 10px 10px; }
+    .parameter-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .parameter-grid .wide { grid-column:1 / -1; }
+    .fixed-setting { padding:8px 9px; border:1px dashed var(--line); border-radius:6px; color:var(--muted); font:11px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .run-options { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:11px; }
+    .run-options input { width:auto; }
+    #run-agent { min-height:42px; border-color:var(--ink); background:var(--ink); color:#fffefa; font-weight:600; }
+    #run-agent.cancel { border-color:#9f4139; background:#9f4139; }
+    #run-agent:disabled { opacity:.55; cursor:wait; }
+    #resume-run { min-height:38px; border-color:#8d887e; background:#f8f6ef; font-weight:600; }
+    #resume-run[hidden] { display:none; }
+    #resume-run:disabled { opacity:.55; cursor:wait; }
+    #store-reference { width:100%; margin-top:9px; }
+    #agent-status { min-height:18px; color:var(--muted); font-size:12px; }
+    #agent-result { border:1px solid var(--line); border-radius:8px; padding:12px; background:var(--panel); }
+    #agent-result[hidden] { display:none; }
+    #agent-result img { display:block; width:160px; height:160px; margin:0 auto 10px; border:1px solid var(--line); image-rendering:pixelated; }
+    .result-stats { display:grid; grid-template-columns:repeat(2,1fr); gap:6px; color:var(--muted); font:11px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .tuple-list { margin-top:9px; color:var(--muted); font-size:11px; }
+    .tuple-list summary { cursor:pointer; }
+    .tuple-list pre { max-height:150px; overflow:auto; white-space:pre-wrap; word-break:break-word; font-size:10px; }
+    .result-link { display:block; margin-top:9px; color:var(--ink); font-size:11px; }
+    .hint { color:var(--muted); font-size:10px; line-height:1.4; }
+    .page-tabs { display:flex; gap:5px; overflow-x:auto; padding-bottom:2px; }
+    .page-tab { flex:0 0 auto; min-height:30px; padding:5px 10px; color:var(--muted); }
+    .page-tab.active { color:var(--ink); border-color:var(--ink); background:#f2efe6; box-shadow:none; }
+    .config-page[hidden] { display:none; }
+    .config-page { display:flex; flex-direction:column; gap:10px; }
+    .team-heading { color:var(--muted); font:11px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    #error { min-height:20px; margin-top:12px; color:#9f4139; font-size:12px; }
+    #coordinate { position:fixed; z-index:10; left:0; right:0; bottom:0; height:28px; display:grid; place-items:center; border-top:1px solid var(--line); background:rgb(244 241 233 / 94%); color:var(--muted); font:12px/1 ui-monospace,SFMono-Regular,Consolas,monospace; backdrop-filter:blur(5px); }
+    @media (max-width:590px) {
+      main { padding-top:18px; }
+      .workspace { grid-template-columns:1fr; }
+      .workspace.forums-open { grid-template-columns:1fr; }
+      .forum-bar { position:static; max-height:none; }
+      .forum-feed { max-height:260px; }
+      .sidebar { position:static; max-height:none; overflow:visible; padding-right:0; }
+      .palette { grid-template-columns:repeat(4,1fr); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header><h1 id="title">collective canvas</h1><span id="connection">connecting</span></header>
+    <div id="workspace" class="workspace">
+      <aside id="forum-bar" class="forum-bar" hidden>
+        <div class="forum-bar-header">Forums</div>
+        <nav id="forum-tabs" class="forum-tabs" aria-label="Forum views"></nav>
+        <div id="forum-feed" class="forum-feed" aria-live="polite"></div>
+      </aside>
+      <div class="canvas-shell"><canvas id="canvas" aria-label="pixel canvas"></canvas></div>
+      <aside class="sidebar">
+        <details class="panel" open>
+          <summary>Canvas</summary>
+          <div class="panel-body">
+            <div class="tool-row">
+              <button id="pencil" class="active" type="button" title="Pencil">Pencil</button>
+              <button id="eraser" type="button" title="Eraser">Eraser</button>
+            </div>
+            <div id="palette" class="palette" aria-label="Palette"></div>
+            <button id="clear" class="clear" type="button">Clear canvas</button>
+            <div class="parameter-grid">
+              <label class="field">Grid size<input id="grid-size" type="number" min="8" max="64" step="1" value="16"></label>
+              <button id="resize-grid" type="button">Resize and clear</button>
+            </div>
+            <div class="meta"><div>version <span id="version">0</span></div><div><span id="filled">0</span> / <span id="capacity">0</span> filled</div></div>
+          </div>
+        </details>
+        <details class="panel" open>
+          <summary>Experiment</summary>
+          <div class="panel-body">
+            <nav id="page-tabs" class="page-tabs" aria-label="Experiment and team configuration"></nav>
+            <section id="experiment-page" class="config-page">
+              <div class="parameter-grid">
+                <label class="field">Competing teams<input id="competing-teams" type="number" min="1" max="5" step="1" value="1"></label>
+                <label class="field">Max artwork size<input id="artwork-size" type="number" min="1" max="32" step="1" value="16"></label>
+                <label class="field">Max pixels / agent / round<input id="agent-step-size" type="number" min="0" max="1024" step="1" value="8"></label>
+                <label class="field">Maximum rounds<input id="agent-max-steps" type="number" min="1" max="256" step="1" value="10"></label>
+              </div>
+              <label class="run-options"><input id="personal-history-enabled" type="checkbox"> Give each agent its own edit history</label>
+              <label class="run-options"><input id="forum-enabled" type="checkbox"> Enable private team forums</label>
+              <label class="run-options"><input id="public-forum-enabled" type="checkbox" disabled> Add a shared public forum</label>
+              <div class="hint">Forums start empty. Each prompt automatically includes the complete accessible forum history. Coloring and writing are mutually exclusive actions.</div>
+              <details class="model-card">
+                <summary>Prompt template</summary>
+                <div class="model-body">
+                  <label class="field">Stored version<select id="prompt-template-preset"></select></label>
+                  <div id="prompt-template-description" class="hint"></div>
+                  <label class="field">Overall prompt template<textarea id="prompt-template-editor" class="prompt-template" spellcheck="false"></textarea></label>
+                  <div class="hint">Use variables such as <code>{{subject}}</code>, <code>{{team_index}}</code>, <code>{{competing_teams}}</code>, and <code>{{step_number}}</code>. Conditional text uses <code>{{#forum}}...{{/forum}}</code>. The generated prompt on each Team page shows the exact rendered result.</div>
+                  <div class="tool-row">
+                    <button id="save-prompt-template" type="button">Save edited copy</button>
+                    <button id="reload-prompt-template" type="button">Reload selected</button>
+                  </div>
+                </div>
+              </details>
+              <details class="model-card" open>
+                <summary>Shared generation parameters</summary>
+                <div class="model-body">
+                  <div class="parameter-grid">
+                    <label class="field">Temperature<input id="agent-temperature" type="number" min="0" max="2" step="0.1"></label>
+                    <label class="field">Max tokens<input id="agent-max-tokens" type="number" min="256" max="32768" step="256"></label>
+                  </div>
+                  <div id="communication-setting" class="fixed-setting">All agents start from the same round image<br>Edits apply in response completion order<br>No messages are exchanged</div>
+                </div>
+              </details>
+              <div class="hint">Set max pixels to 0 for one simultaneous call from every configured agent. Forums require a positive per-round pixel budget.</div>
+            </section>
+            <div id="team-pages"></div>
+          </div>
+        </details>
+        <label class="run-options"><input id="clear-first" type="checkbox" checked> Clear canvas before applying output</label>
+        <button id="restore-defaults" type="button">Restore defaults</button>
+        <button id="run-agent" type="button">Run experiment</button>
+        <button id="resume-run" type="button" hidden>Resume interrupted run</button>
+        <div id="agent-status" role="status"></div>
+        <section id="agent-result" hidden>
+          <img id="agent-output" alt="Latest model drawing">
+          <div class="result-stats"><span>rounds <b id="result-steps"></b></span><span>calls <b id="result-calls"></b></span><span>filled <b id="result-pixels"></b></span><span>cost <b id="result-cost"></b></span><span>input <b id="result-input"></b></span><span>output <b id="result-output"></b></span><span>stop <b id="result-stop"></b></span></div>
+          <a id="result-video" class="result-link" download hidden>Download run video</a>
+          <button id="store-reference" type="button" hidden>Store as reference</button>
+        </section>
+      </aside>
+    </div>
+    <div id="error" role="status"></div>
+  </main>
+  <div id="coordinate">pixel —, —</div>
+  <script>
+    const canvas = document.querySelector('#canvas');
+    const ctx = canvas.getContext('2d');
+    const connection = document.querySelector('#connection');
+    const title = document.querySelector('#title');
+    const error = document.querySelector('#error');
+    const version = document.querySelector('#version');
+    const filled = document.querySelector('#filled');
+    const capacity = document.querySelector('#capacity');
+    const palette = document.querySelector('#palette');
+    const coordinate = document.querySelector('#coordinate');
+    const pencil = document.querySelector('#pencil');
+    const eraser = document.querySelector('#eraser');
+    const gridSize = document.querySelector('#grid-size');
+    const resizeGrid = document.querySelector('#resize-grid');
+    const workspace = document.querySelector('#workspace');
+    const forumBar = document.querySelector('#forum-bar');
+    const forumTabs = document.querySelector('#forum-tabs');
+    const forumFeed = document.querySelector('#forum-feed');
+    const pageTabs = document.querySelector('#page-tabs');
+    const experimentPage = document.querySelector('#experiment-page');
+    const teamPages = document.querySelector('#team-pages');
+    const competingTeams = document.querySelector('#competing-teams');
+    const artworkSize = document.querySelector('#artwork-size');
+    const personalHistoryEnabled = document.querySelector('#personal-history-enabled');
+    const forumEnabled = document.querySelector('#forum-enabled');
+    const publicForumEnabled = document.querySelector('#public-forum-enabled');
+    const agentStepSize = document.querySelector('#agent-step-size');
+    const agentMaxSteps = document.querySelector('#agent-max-steps');
+    const agentTemperature = document.querySelector('#agent-temperature');
+    const agentMaxTokens = document.querySelector('#agent-max-tokens');
+    const promptTemplatePreset = document.querySelector('#prompt-template-preset');
+    const promptTemplateEditor = document.querySelector('#prompt-template-editor');
+    const promptTemplateDescription = document.querySelector('#prompt-template-description');
+    const savePromptTemplate = document.querySelector('#save-prompt-template');
+    const reloadPromptTemplate = document.querySelector('#reload-prompt-template');
+    const restoreDefaults = document.querySelector('#restore-defaults');
+    const communicationSetting = document.querySelector('#communication-setting');
+    const runAgent = document.querySelector('#run-agent');
+    const resumeRun = document.querySelector('#resume-run');
+    const agentStatus = document.querySelector('#agent-status');
+    const agentResult = document.querySelector('#agent-result');
+    const storeReference = document.querySelector('#store-reference');
+    let state = { width:32, height:32, version:0, pixels:Array.from({length:32},()=>Array(32).fill(null)), colors:{} };
+    let mode = 'pencil', selected = 'black', drawing = false, lastCell = '';
+    let promptTimer = null;
+    let objectDefaults = {}, displayedGridSize = 0, defaultsCache = null, promptTemplateRecords = {}, promptTemplateDefaultId = 'forum_conflict_v3';
+    let teamConfigs = [], activePage = 'experiment';
+    let forumEvents = [], activeForumView = 'activity';
+    let activeRunToken = null, cancellationRequested = false, lastCompletedRun = null, lastCompletedTeamCount = 0, resumableRunInfo = null;
+    let settingsReady = false, settingsTimer = null;
+    const SETTINGS_KEY = 'collective-canvas.settings.v1';
+    const PROMPT_LIBRARY_KEY = 'collective-canvas.prompt-library.v1';
+    const DEFAULT_MEMBER = {model:'z-ai/glm-5.3-flash',provider:'relace/fp4',reasoning:'low',reasoning_max_tokens:500};
+    const MODEL_OPTIONS = '<option value="z-ai/glm-5.3-flash">GLM 5.3 Flash</option><option value="openai/gpt-5.6-luna">GPT-5.6 Luna</option><option value="meta/muse-spark-1.3-contributor">Muse Spark 1.3 Contributor</option><option value="qwen/qwen3.8-27b">Qwen3.8 27B</option><option value="google/gemini-3.8-flash">Gemini 3.8 Flash</option><option value="deepseek/deepseek-v4-flash-vision-exp">DeepSeek V4 Flash Vision Exp</option>';
+    const PROVIDER_OPTIONS = '<option value="relace/fp4">Relace FP4</option><option value="openai/flex">OpenAI Flex</option><option value="meta">Meta</option><option value="reka/fp8">Reka AI FP8</option><option value="parasail/fp8">Parasail FP8</option><option value="google-ai-studio/flex">Google AI Studio Flex</option><option value="fireworks">Fireworks</option><option value="deepinfra/fp8">DeepInfra FP8</option>';
+
+    function resize() {
+      const size = Math.max(320, Math.round(canvas.getBoundingClientRect().width * devicePixelRatio));
+      if (canvas.width !== size || canvas.height !== size) { canvas.width = size; canvas.height = size; }
+      render();
+    }
+    let recorder = null, recordingChunks = [], recordingFinishing = false;
+    function render() {
+      const cell = canvas.width / state.width;
+      ctx.fillStyle = '#fffefa'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      for (let y=0; y<state.height; y++) for (let x=0; x<state.width; x++) {
+        const name = state.pixels[y][x];
+        if (name) { ctx.fillStyle = state.colors[name]; ctx.fillRect(x*cell,y*cell,cell,cell); }
+      }
+      ctx.beginPath(); ctx.strokeStyle = '#d8d3c7'; ctx.lineWidth = Math.max(1, devicePixelRatio*.55);
+      for (let i=0; i<=state.width; i++) { const p=Math.round(i*cell)+.5; ctx.moveTo(p,0); ctx.lineTo(p,canvas.height); }
+      for (let i=0; i<=state.height; i++) { const p=Math.round(i*cell)+.5; ctx.moveTo(0,p); ctx.lineTo(canvas.width,p); }
+      ctx.stroke();
+      version.textContent = state.version;
+      filled.textContent = state.pixels.flat().filter(Boolean).length;
+      capacity.textContent = state.width * state.height;
+      maybeFinishRecording();
+    }
+    function makePalette() {
+      palette.replaceChildren();
+      Object.entries(state.colors).forEach(([name,hex]) => {
+        const button=document.createElement('button'); button.type='button'; button.className='swatch'; button.title=name;
+        button.setAttribute('aria-label', name); button.innerHTML=`<span style="background:${hex}"></span>`;
+        button.onclick=()=>{ selected=name; setMode('pencil'); updatePalette(); };
+        palette.append(button);
+      });
+      updatePalette();
+    }
+    function updatePalette() { [...palette.children].forEach(b=>b.classList.toggle('active', mode==='pencil' && b.title===selected)); }
+    function setMode(value) { mode=value; pencil.classList.toggle('active',value==='pencil'); eraser.classList.toggle('active',value==='eraser'); updatePalette(); }
+    pencil.onclick=()=>setMode('pencil'); eraser.onclick=()=>setMode('eraser');
+    function cellAt(event) {
+      const box=canvas.getBoundingClientRect();
+      return { x:Math.max(0,Math.min(state.width-1,Math.floor((event.clientX-box.left)/box.width*state.width))), y:Math.max(0,Math.min(state.height-1,Math.floor((event.clientY-box.top)/box.height*state.height))) };
+    }
+    function showCoordinate(event) { const {x,y}=cellAt(event); coordinate.textContent=`pixel ${x}, ${y}`; }
+    async function paint(event) {
+      const {x,y}=cellAt(event), key=`${x},${y}`; if (key===lastCell) return; lastCell=key;
+      const color=mode==='eraser'?null:selected; state.pixels[y][x]=color; render();
+      try {
+        const response=await fetch('/api/pixel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:mode==='eraser'?'erase':'place',x,y,color,source:'manual'})});
+        if (!response.ok) throw new Error((await response.json()).error || response.statusText);
+      } catch (reason) { error.textContent=reason.message; await loadState(); }
+    }
+    canvas.addEventListener('pointerdown',event=>{ drawing=true; lastCell=''; showCoordinate(event); canvas.setPointerCapture(event.pointerId); paint(event); });
+    canvas.addEventListener('pointermove',event=>{ showCoordinate(event); if (drawing) paint(event); });
+    canvas.addEventListener('pointerup',()=>{ drawing=false; lastCell=''; });
+    canvas.addEventListener('pointercancel',()=>{ drawing=false; lastCell=''; });
+    canvas.addEventListener('pointerleave',()=>{ if (!drawing) coordinate.textContent='pixel —, —'; });
+    document.querySelector('#clear').onclick=async()=>{ if (!confirm(`Clear all ${state.width*state.height} cells?`)) return; await fetch('/api/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"source":"manual"}'}); };
+    function readStoredJson(key,fallback) {
+      try { const value=JSON.parse(localStorage.getItem(key)); return value??fallback; }
+      catch (_) { return fallback; }
+    }
+    function customPromptLibrary() {
+      const value=readStoredJson(PROMPT_LIBRARY_KEY,{});
+      return value && typeof value==='object' && !Array.isArray(value) ? value : {};
+    }
+    function renderPromptTemplateOptions(selectedId=promptTemplateDefaultId) {
+      promptTemplatePreset.replaceChildren();
+      Object.values(promptTemplateRecords).forEach(record=>{
+        const option=document.createElement('option'); option.value=record.id; option.textContent=record.name; promptTemplatePreset.append(option);
+      });
+      promptTemplatePreset.value=Object.hasOwn(promptTemplateRecords,selectedId)?selectedId:promptTemplateDefaultId;
+      updatePromptTemplateDescription();
+    }
+    function updatePromptTemplateDescription() {
+      promptTemplateDescription.textContent=promptTemplateRecords[promptTemplatePreset.value]?.description||'';
+    }
+    function settingsSnapshot() {
+      if (teamPages.children.length) syncTeamConfigs();
+      return {
+        version:1,
+        competing_teams:Number(competingTeams.value), artwork_size:Number(artworkSize.value),
+        step_size:Number(agentStepSize.value), max_steps:Number(agentMaxSteps.value),
+        personal_history_enabled:personalHistoryEnabled.checked, forum_enabled:forumEnabled.checked,
+        public_forum_enabled:publicForumEnabled.checked, temperature:Number(agentTemperature.value),
+        max_tokens:Number(agentMaxTokens.value), clear_first:document.querySelector('#clear-first').checked,
+        teams:teamConfigs, active_page:activePage,
+        prompt_template_id:promptTemplatePreset.value, prompt_template:promptTemplateEditor.value,
+      };
+    }
+    function saveSettingsNow() {
+      if (!settingsReady) return;
+      try { localStorage.setItem(SETTINGS_KEY,JSON.stringify(settingsSnapshot())); }
+      catch (_) { /* A run remains usable if browser storage is unavailable. */ }
+    }
+    function queueSettingsSave() {
+      if (!settingsReady) return;
+      clearTimeout(settingsTimer); settingsTimer=setTimeout(saveSettingsNow,120);
+    }
+    function cloneMember(value=DEFAULT_MEMBER) { return {...DEFAULT_MEMBER,...value}; }
+    function freshTeam(index=0) {
+      const tags=Object.keys(objectDefaults), tag=tags[index%Math.max(tags.length,1)]||'apple';
+      const preset=objectDefaults[tag]||{name:'apple',description:''};
+      return {preset:tag,subject:preset.name,description:preset.description,use_reference:false,center_x:'',center_y:'',member_count:2,members:[cloneMember(),cloneMember()]};
+    }
+    function objectOptions(selected='apple') {
+      const values=Object.entries(objectDefaults).map(([tag,value])=>`<option value="${tag}">${value.name.replace(/^./,letter=>letter.toLocaleUpperCase())}</option>`).join('');
+      return values+`<option value="custom">Custom object</option>`;
+    }
+    function collectMembers(container) {
+      return [...container.querySelectorAll('.member-card')].map(card=>({
+        model:card.querySelector('.member-model').value,
+        provider:card.querySelector('.member-provider').value,
+        reasoning:card.querySelector('.member-reasoning').value,
+        reasoning_max_tokens:Number(card.querySelector('.member-reasoning-tokens').value)
+      }));
+    }
+    function referenceTagForPage(page) {
+      const preset=page.querySelector('.object-preset'), subject=page.querySelector('.agent-subject');
+      if (preset.value!=='custom' && Object.hasOwn(objectDefaults,preset.value)) return preset.value;
+      const name=subject.value.trim().toLocaleLowerCase();
+      const match=Object.entries(objectDefaults).find(([,value])=>value.name.trim().toLocaleLowerCase()===name);
+      return match?.[0]||null;
+    }
+    function selectedReferenceTag(page) {
+      return page.querySelector('.use-reference').checked ? referenceTagForPage(page) : null;
+    }
+    function syncTeamConfigs() {
+      [...teamPages.querySelectorAll('.team-page')].forEach((page,index)=>{
+        const preset=page.querySelector('.object-preset');
+        teamConfigs[index]={
+          preset:preset.value,
+          subject:page.querySelector('.agent-subject').value,
+          description:page.querySelector('.agent-description').value,
+          use_reference:page.querySelector('.use-reference').checked,
+          center_x:page.querySelector('.team-center-x').value,
+          center_y:page.querySelector('.team-center-y').value,
+          member_count:Number(page.querySelector('.agent-team-size').value),
+          members:collectMembers(page.querySelector('.member-configs')),
+        };
+      });
+    }
+    function collectTeams() {
+      syncTeamConfigs();
+      return teamConfigs.map((team,index)=>{
+        const hasX=team.center_x!=='';
+        const hasY=team.center_y!=='';
+        if (hasX!==hasY) throw new Error(`Team ${index+1} center requires both x and y.`);
+        return {
+          subject:team.subject,
+          description:team.description,
+          reference_tag:team.use_reference ? referenceTagForConfig(team) : null,
+          center:hasX?{x:Number(team.center_x),y:Number(team.center_y)}:null,
+          members:team.members,
+        };
+      });
+    }
+    function referenceTagForConfig(team) {
+      if (team.preset!=='custom' && Object.hasOwn(objectDefaults,team.preset)) return team.preset;
+      const name=team.subject.trim().toLocaleLowerCase();
+      const match=Object.entries(objectDefaults).find(([,value])=>value.name.trim().toLocaleLowerCase()===name);
+      return match?.[0]||null;
+    }
+    function refreshReferencePreview(page) {
+      const availableTag=referenceTagForPage(page), toggle=page.querySelector('.use-reference');
+      const supported=Boolean(availableTag), label=page.querySelector('.reference-toggle-label');
+      toggle.disabled=!supported;
+      if (!supported) toggle.checked=false;
+      label.textContent=supported?'Attach the stored reference image':'No stored reference for this custom object';
+      const tag=selectedReferenceTag(page), attachment=page.querySelector('.reference-attachment');
+      attachment.hidden=!tag;
+      if (tag) {
+        const targetSize=Math.max(1,Math.min(state.width,Number(artworkSize.value)||16));
+        page.querySelector('.reference-preview').src=`/api/reference-image?tag=${encodeURIComponent(tag)}&size=${targetSize}&v=${Date.now()}`;
+        page.querySelector('.reference-label').textContent=`${objectDefaults[tag].name} / ${targetSize}×${targetSize}`;
+      }
+    }
+    function setDimensions() {
+      title.textContent=`collective canvas / ${state.width}×${state.height}`;
+      canvas.setAttribute('aria-label',`${state.width} by ${state.height} pixel canvas`);
+      agentStepSize.max=state.width*state.height;
+      if (Number(agentStepSize.value)>state.width*state.height) agentStepSize.value=state.width*state.height;
+      artworkSize.max=state.width;
+      if (Number(artworkSize.value)>state.width) artworkSize.value=state.width;
+      document.querySelectorAll('.team-center-x,.team-center-y').forEach(input=>{
+        input.max=state.width-1;
+        if (input.value!=='' && Number(input.value)>=state.width) input.value=state.width-1;
+      });
+      if (document.activeElement!==gridSize) gridSize.value=state.width;
+      if (displayedGridSize!==state.width) {
+        displayedGridSize=state.width;
+        document.querySelectorAll('.grid-preview').forEach(image=>image.src=`/api/grid-image?v=${state.width}-${Date.now()}`);
+        document.querySelectorAll('.team-page').forEach(refreshReferencePreview);
+      }
+    }
+    async function loadState() { const response=await fetch('/api/state',{cache:'no-store'}); state=await response.json(); setDimensions(); makePalette(); render(); }
+    function connect() {
+      const events=new EventSource('/events');
+      events.onopen=()=>{ connection.textContent='live'; connection.classList.add('online'); error.textContent=''; };
+      events.onerror=()=>{ connection.textContent='reconnecting'; connection.classList.remove('online'); };
+      events.onmessage=async({data})=>{
+        const event=JSON.parse(data);
+        if (event.type==='snapshot') { state=event.state; setDimensions(); makePalette(); render(); }
+        else if (event.type==='pixel') { state.pixels[event.y][event.x]=event.color; state.version=event.version; render(); }
+        else if (event.type==='clear') { state.pixels=Array.from({length:state.height},()=>Array(state.width).fill(null)); state.version=event.version; render(); }
+        else if (event.type==='agent_step') {
+          const kind=event.action_kind||'color';
+          const record={round:event.round,team:event.team||1,member:event.member||event.agent,kind,forum:event.forum,message:event.message||'',changed:event.changed,posts_seen:event.forum_event?.posts_seen};
+          if (forumEnabled.checked) { forumEvents.push(record); renderForumBar(); }
+          const actionLabel=kind==='color'?`${event.changed} pixels changed`:kind.startsWith('read_')?`read ${event.forum} forum`:`wrote to ${event.forum} forum`;
+          agentStatus.textContent=cancellationRequested?`Cancelling after round ${event.round} finishes…`:`Round ${event.round} · team ${event.team||1}, member ${event.member||event.agent} · ${actionLabel}`;
+        }
+        else if (event.type==='agent_retry') {
+          const actor=event.round?`Round ${event.round} · team ${event.team||1}, member ${event.member||event.agent} · `:'';
+          const reason=event.kind==='rate_limit'?'rate limited':event.kind==='invalid_output'?'invalid model output':event.kind==='timeout'?'request timed out':event.kind==='connection'?'connection failed':`temporary HTTP error`;
+          const timing=Number(event.delay_seconds)>0?`retrying in ${Number(event.delay_seconds)}s`:'retrying immediately';
+          agentStatus.textContent=`${actor}${reason}; ${timing} (${event.retry}/${event.max_retries})`;
+        }
+        else if (event.type==='resync') await loadState();
+      };
+    }
+    function startMappingRecording() {
+      if (new URLSearchParams(location.search).get('record')!=='mapping') return;
+      if (!canvas.captureStream || !window.MediaRecorder) { error.textContent='This browser cannot record the canvas.'; return; }
+      const stream=canvas.captureStream(30);
+      recorder=new MediaRecorder(stream,{mimeType:'video/webm'});
+      recorder.ondataavailable=event=>{ if (event.data.size) recordingChunks.push(event.data); };
+      recorder.onstop=async()=>{
+        const blob=new Blob(recordingChunks,{type:'video/webm'});
+        try {
+          const response=await fetch('/api/recording',{method:'POST',headers:{'Content-Type':'video/webm'},body:blob});
+          if (!response.ok) throw new Error((await response.json()).error || response.statusText);
+          coordinate.textContent=`mapping video saved · ${Math.round(blob.size/1024)} KB`;
+        } catch (reason) { error.textContent=reason.message; }
+      };
+      recorder.start(250); coordinate.textContent='recording mapping…';
+    }
+    function renderMemberCards(container,count,configurations=[]) {
+      const existing=container.children.length ? collectMembers(container) : [];
+      container.replaceChildren();
+      for (let index=0; index<count; index++) {
+        const config=cloneMember(configurations[index]||existing[index]);
+        const card=document.createElement('details'); card.className='model-card member-card'; card.open=count===1;
+        card.innerHTML=`<summary>Member ${index+1} · GLM 5.3 Flash</summary><div class="model-body">
+          <label class="field">Model<select class="member-model">${MODEL_OPTIONS}</select></label>
+          <label class="field">Provider endpoint<select class="member-provider">${PROVIDER_OPTIONS}</select></label>
+          <div class="parameter-grid">
+            <label class="field">Reasoning<select class="member-reasoning"><option value="disabled">Disabled</option><option value="low">Low</option><option value="high">High</option><option value="max">Maximum</option></select></label>
+            <label class="field">Reasoning budget<input class="member-reasoning-tokens" type="number" min="1" max="32768" step="100"></label>
+          </div>
+          <div class="fixed-setting member-routing-note">Output validation: pixel JSON<br>Selected endpoint only</div>
+        </div>`;
+        const model=card.querySelector('.member-model'), provider=card.querySelector('.member-provider'), reasoning=card.querySelector('.member-reasoning'), budget=card.querySelector('.member-reasoning-tokens'), routingNote=card.querySelector('.member-routing-note');
+        model.value=config.model; provider.value=config.provider; reasoning.value=config.reasoning; budget.value=config.reasoning_max_tokens;
+        const updateSummary=()=>{ card.querySelector('summary').childNodes[0].textContent=`Member ${index+1} · ${model.options[model.selectedIndex].text} `; };
+        const updateProviderLock=()=>{
+          const museContributor=model.value==='meta/muse-spark-1.3-contributor';
+          const luna=model.value==='openai/gpt-5.6-luna';
+          provider.disabled=museContributor;
+          provider.title=museContributor?'Muse Spark 1.3 Contributor has one Meta endpoint.':'';
+          budget.disabled=luna;
+          budget.title=luna?'Luna uses the selected reasoning effort; this endpoint does not expose an exact reasoning-token budget.':'';
+          routingNote.innerHTML=luna?'Output validation: pixel JSON<br>Selected endpoint only<br>Luna: effort control; temperature and exact reasoning budget unsupported':'Output validation: pixel JSON<br>Selected endpoint only';
+        };
+        updateSummary(); updateProviderLock();
+        model.addEventListener('change',()=>{
+          if (model.value==='z-ai/glm-5.3-flash') { provider.value='relace/fp4'; reasoning.value='low'; }
+          else if (model.value==='openai/gpt-5.6-luna') { provider.value='openai/flex'; reasoning.value='low'; }
+          else if (model.value==='meta/muse-spark-1.3-contributor') { provider.value='meta'; reasoning.value='low'; }
+          else if (model.value==='qwen/qwen3.8-27b') { provider.value='reka/fp8'; reasoning.value='low'; }
+          else if (model.value==='google/gemini-3.8-flash') { provider.value='google-ai-studio/flex'; reasoning.value='low'; }
+          else { provider.value='fireworks'; reasoning.value='disabled'; }
+          updateSummary(); updateProviderLock(); syncTeamConfigs();
+        });
+        [provider,reasoning,budget].forEach(control=>control.addEventListener('change',syncTeamConfigs));
+        container.append(card);
+      }
+    }
+    function makeTeamPage(config,index) {
+      const page=document.createElement('section');
+      page.className='config-page team-page'; page.dataset.teamIndex=index; page.hidden=activePage!==`team-${index+1}`;
+      page.innerHTML=`
+        <div class="team-heading">Team ${index+1} goal and members</div>
+        <label class="field">Object preset<select class="object-preset">${objectOptions(config.preset)}</select></label>
+        <label class="field">Subject<input class="agent-subject" maxlength="100"></label>
+        <label class="field">Description<textarea class="agent-description description" maxlength="1000"></textarea></label>
+        <label class="run-options"><input class="use-reference" type="checkbox"> <span class="reference-toggle-label">Attach the stored reference image</span></label>
+        <div class="parameter-grid">
+          <label class="field">Assigned center x<input class="team-center-x" type="number" min="0" max="${state.width-1}" step="1" placeholder="optional"></label>
+          <label class="field">Assigned center y<input class="team-center-y" type="number" min="0" max="${state.height-1}" step="1" placeholder="optional"></label>
+        </div>
+        <div class="hint">Set both coordinates to allocate this team a fixed square based on Max artwork size. Use distant centers for a non-overlapping control; leave both blank for free placement.</div>
+        <label class="field">Members in team<input class="agent-team-size" type="number" min="1" max="5" step="1"></label>
+        <div class="member-configs"></div>
+        <label class="field">Generated prompt for member 1<textarea class="agent-prompt" spellcheck="false" readonly></textarea></label>
+        <div class="attachment"><img class="grid-preview" src="/api/grid-image" alt="Current coordinate grid"><span>Each call receives<br><strong>the labelled shared canvas</strong></span></div>
+        <div class="attachment reference-attachment" hidden><img class="reference-preview" alt="Stored reference drawing"><span>Tagged target<br><strong class="reference-label"></strong></span></div>`;
+      const preset=page.querySelector('.object-preset'), subject=page.querySelector('.agent-subject'), description=page.querySelector('.agent-description');
+      const reference=page.querySelector('.use-reference'), centerX=page.querySelector('.team-center-x'), centerY=page.querySelector('.team-center-y'), memberCount=page.querySelector('.agent-team-size'), members=page.querySelector('.member-configs');
+      preset.value=Object.hasOwn(objectDefaults,config.preset)?config.preset:'custom';
+      subject.value=config.subject; description.value=config.description; reference.checked=config.use_reference; centerX.value=config.center_x??''; centerY.value=config.center_y??''; memberCount.value=config.member_count;
+      renderMemberCards(members,config.member_count,config.members);
+      preset.addEventListener('change',()=>{
+        const value=objectDefaults[preset.value];
+        if (value) { subject.value=value.name; description.value=value.description; }
+        refreshReferencePreview(page); syncTeamConfigs(); queuePromptRefresh(index);
+      });
+      subject.addEventListener('input',()=>{
+        const value=objectDefaults[preset.value];
+        if (value && subject.value.trim().toLocaleLowerCase()!==value.name.toLocaleLowerCase()) preset.value='custom';
+        refreshReferencePreview(page); syncTeamConfigs(); queuePromptRefresh(index);
+      });
+      description.addEventListener('input',()=>{ syncTeamConfigs(); queuePromptRefresh(index); });
+      reference.addEventListener('change',()=>{ refreshReferencePreview(page); syncTeamConfigs(); queuePromptRefresh(index); });
+      [centerX,centerY].forEach(control=>control.addEventListener('input',()=>{ syncTeamConfigs(); queuePromptRefresh(index); }));
+      memberCount.addEventListener('input',()=>{
+        const count=Math.max(1,Math.min(5,Number(memberCount.value)||1));
+        renderMemberCards(members,count); syncTeamConfigs(); queuePromptRefresh(index);
+      });
+      refreshReferencePreview(page);
+      return page;
+    }
+    function renderPages() {
+      teamPages.replaceChildren();
+      teamConfigs.forEach((config,index)=>teamPages.append(makeTeamPage(config,index)));
+      pageTabs.replaceChildren();
+      const pages=[{id:'experiment',label:'Experiment'},...teamConfigs.map((_,index)=>({id:`team-${index+1}`,label:`Team ${index+1}`}))];
+      pages.forEach(item=>{
+        const button=document.createElement('button'); button.type='button'; button.className='page-tab'; button.textContent=item.label;
+        button.classList.toggle('active',activePage===item.id);
+        button.onclick=()=>showPage(item.id);
+        pageTabs.append(button);
+      });
+    }
+    function availableForumViews() {
+      const views=[{id:'activity',label:'Activity'}];
+      teamConfigs.forEach((_,index)=>views.push({id:`team-${index+1}`,label:`Team ${index+1}`}));
+      if (publicForumEnabled.checked) views.push({id:'public',label:'Public'});
+      return views;
+    }
+    function forumEventVisible(event) {
+      if (activeForumView==='activity') return true;
+      if (!String(event.kind||'').startsWith('write_')) return false;
+      if (activeForumView==='public') return event.forum==='public';
+      return event.forum==='team' && event.team===Number(activeForumView.split('-')[1]);
+    }
+    function renderForumBar() {
+      const views=availableForumViews();
+      if (!views.some(view=>view.id===activeForumView)) activeForumView='activity';
+      forumTabs.replaceChildren();
+      views.forEach(view=>{
+        const button=document.createElement('button'); button.type='button'; button.className='forum-tab'; button.textContent=view.label;
+        button.classList.toggle('active',view.id===activeForumView);
+        button.onclick=()=>{ activeForumView=view.id; renderForumBar(); };
+        forumTabs.append(button);
+      });
+      forumFeed.replaceChildren();
+      const visible=forumEvents.filter(forumEventVisible);
+      if (!visible.length) {
+        const empty=document.createElement('div'); empty.className='forum-empty';
+        empty.textContent=activeForumView==='activity'?'No actions yet. All forums begin empty.':'No posts yet.';
+        forumFeed.append(empty); return;
+      }
+      visible.forEach(event=>{
+        const entry=document.createElement('article'); entry.className='forum-entry';
+        const meta=document.createElement('div'); meta.className='forum-entry-meta';
+        const actor=`R${event.round} · T${event.team}M${event.member}`;
+        if (event.kind==='color') meta.textContent=`${actor} · colored ${event.changed} pixel${event.changed===1?'':'s'}`;
+        else if (String(event.kind).startsWith('read_')) meta.textContent=`${actor} · read ${event.forum} · ${event.posts_seen??0} posts seen`;
+        else meta.textContent=`${actor} · wrote to ${event.forum}`;
+        entry.append(meta);
+        if (event.message) { const message=document.createElement('div'); message.className='forum-entry-message'; message.textContent=event.message; entry.append(message); }
+        forumFeed.append(entry);
+      });
+      forumFeed.scrollTop=forumFeed.scrollHeight;
+    }
+    function updateForumBar() {
+      const forumCompatible=Number(agentStepSize.value)>0;
+      forumEnabled.disabled=!forumCompatible;
+      if (!forumCompatible) forumEnabled.checked=false;
+      publicForumEnabled.disabled=!forumEnabled.checked;
+      if (!forumEnabled.checked) publicForumEnabled.checked=false;
+      forumBar.hidden=!forumEnabled.checked;
+      workspace.classList.toggle('forums-open',forumEnabled.checked);
+      communicationSetting.innerHTML=forumEnabled.checked
+        ? `All agents start from the same round image<br>Actions resolve in response completion order<br>${publicForumEnabled.checked?'Private team and shared public forums':'Private team forums only'}`
+        : 'All agents start from the same round image<br>Edits apply in response completion order<br>No messages are exchanged';
+      renderForumBar();
+      requestAnimationFrame(resize);
+    }
+    function showPage(id) {
+      activePage=id;
+      experimentPage.hidden=id!=='experiment';
+      [...teamPages.children].forEach((page,index)=>page.hidden=id!==`team-${index+1}`);
+      [...pageTabs.children].forEach((tab,index)=>tab.classList.toggle('active',index===(id==='experiment'?0:Number(id.split('-')[1]))));
+      if (id.startsWith('team-')) refreshPrompt(Number(id.split('-')[1])-1).catch(reason=>error.textContent=reason.message);
+      queueSettingsSave();
+    }
+    async function loadAgentDefaults(ignoreStored=false) {
+      settingsReady=false;
+      const [defaultsResponse,templatesResponse]=await Promise.all([
+        fetch('/api/agent-defaults',{cache:'no-store'}),
+        fetch('/api/prompt-templates',{cache:'no-store'}),
+      ]);
+      if (!defaultsResponse.ok || !templatesResponse.ok) throw new Error('Could not load experiment defaults.');
+      const defaults=await defaultsResponse.json(), templateData=await templatesResponse.json();
+      defaultsCache=defaults; objectDefaults=defaults.objects; promptTemplateDefaultId=templateData.default_id;
+      promptTemplateRecords={};
+      [...templateData.templates,...Object.values(customPromptLibrary())].forEach(record=>{
+        if (record && typeof record.id==='string' && typeof record.name==='string' && typeof record.template==='string') promptTemplateRecords[record.id]=record;
+      });
+      const stored=ignoreStored?null:readStoredJson(SETTINGS_KEY,null);
+      const clamp=(value,minimum,maximum,fallback)=>Number.isFinite(Number(value))?Math.max(minimum,Math.min(maximum,Number(value))):fallback;
+      competingTeams.value=clamp(stored?.competing_teams,1,5,defaults.competing_teams||1);
+      artworkSize.value=clamp(stored?.artwork_size,1,state.width,defaults.artwork_size||Math.min(16,state.width));
+      agentStepSize.value=clamp(stored?.step_size,0,state.width*state.height,defaults.step_size);
+      agentMaxSteps.value=clamp(stored?.max_steps,1,256,defaults.max_steps);
+      personalHistoryEnabled.checked=typeof stored?.personal_history_enabled==='boolean'?stored.personal_history_enabled:defaults.personal_history_enabled;
+      forumEnabled.checked=typeof stored?.forum_enabled==='boolean'?stored.forum_enabled:defaults.forum_enabled;
+      publicForumEnabled.checked=typeof stored?.public_forum_enabled==='boolean'?stored.public_forum_enabled:defaults.public_forum_enabled;
+      agentTemperature.value=clamp(stored?.temperature,0,2,defaults.parameters.temperature);
+      agentMaxTokens.value=clamp(stored?.max_tokens,256,32768,defaults.parameters.max_tokens);
+      document.querySelector('#clear-first').checked=typeof stored?.clear_first==='boolean'?stored.clear_first:true;
+      gridSize.value=defaults.grid_size;
+      const defaultTeam={preset:'apple',subject:defaults.subject,description:defaults.description,use_reference:defaults.reference_enabled,center_x:'',center_y:'',member_count:defaults.team_size,members:defaults.members.map(cloneMember)};
+      const savedTeams=Array.isArray(stored?.teams)?stored.teams.slice(0,5):[];
+      teamConfigs=savedTeams.length?savedTeams.map((team,index)=>{
+        const fallback=freshTeam(index), count=clamp(team?.member_count,1,5,2);
+        const members=Array.isArray(team?.members)?team.members.slice(0,count).map(cloneMember):[];
+        while (members.length<count) members.push(cloneMember());
+        return {
+          preset:typeof team?.preset==='string'?team.preset:fallback.preset,
+          subject:typeof team?.subject==='string'?team.subject:fallback.subject,
+          description:typeof team?.description==='string'?team.description:fallback.description,
+          use_reference:Boolean(team?.use_reference), center_x:team?.center_x??'', center_y:team?.center_y??'',
+          member_count:count, members,
+        };
+      }):[defaultTeam];
+      competingTeams.value=teamConfigs.length;
+      const selectedId=typeof stored?.prompt_template_id==='string' && Object.hasOwn(promptTemplateRecords,stored.prompt_template_id)?stored.prompt_template_id:promptTemplateDefaultId;
+      renderPromptTemplateOptions(selectedId);
+      promptTemplateEditor.value=typeof stored?.prompt_template==='string' && stored.prompt_template?stored.prompt_template:promptTemplateRecords[selectedId].template;
+      activePage=typeof stored?.active_page==='string'?stored.active_page:'experiment';
+      if (activePage.startsWith('team-') && Number(activePage.split('-')[1])>teamConfigs.length) activePage='experiment';
+      updateForumBar(); renderPages(); showPage(activePage); setDimensions();
+      settingsReady=true;
+      await Promise.all(teamConfigs.map((_,index)=>refreshPrompt(index)));
+      saveSettingsNow();
+    }
+    async function refreshPrompt(index=0) {
+      const page=teamPages.children[index]; if (!page) return;
+      const response=await fetch('/api/prompt-preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        subject:page.querySelector('.agent-subject').value,
+        description:page.querySelector('.agent-description').value,
+        reference_tag:selectedReferenceTag(page),
+        personal_history_enabled:personalHistoryEnabled.checked,
+        forum_enabled:forumEnabled.checked,
+        public_forum_enabled:publicForumEnabled.checked,
+        step_size:Number(agentStepSize.value),
+        team_size:Number(page.querySelector('.agent-team-size').value),
+        competing_teams:teamConfigs.length,
+        team_index:index+1,
+        team_objectives:[...teamPages.children].map((teamPage,teamIndex)=>teamPage.querySelector('.agent-subject')?.value||teamConfigs[teamIndex].subject),
+        artwork_size:Number(artworkSize.value),
+        prompt_template_id:promptTemplatePreset.value,
+        prompt_template:promptTemplateEditor.value,
+        center:page.querySelector('.team-center-x').value!=='' && page.querySelector('.team-center-y').value!=='' ? {x:Number(page.querySelector('.team-center-x').value),y:Number(page.querySelector('.team-center-y').value)} : null
+      })});
+      const result=await response.json();
+      if (!response.ok) throw new Error(result.error || response.statusText);
+      page.querySelector('.agent-prompt').value=result.prompt;
+      page.querySelector('.grid-preview').alt=Number(agentStepSize.value)===0?'Empty coordinate grid':'Latest shared coordinate grid';
+    }
+    function refreshAllPrompts() { return Promise.all(teamConfigs.map((_,index)=>refreshPrompt(index))); }
+    function queuePromptRefresh(index=null) {
+      clearTimeout(promptTimer);
+      promptTimer=setTimeout(()=>{
+        const task=index===null?refreshAllPrompts():refreshPrompt(index);
+        task.catch(reason=>error.textContent=reason.message);
+      },180);
+    }
+    competingTeams.addEventListener('input',()=>{
+      syncTeamConfigs();
+      const count=Math.max(1,Math.min(5,Number(competingTeams.value)||1));
+      while (teamConfigs.length<count) teamConfigs.push(freshTeam(teamConfigs.length));
+      teamConfigs=teamConfigs.slice(0,count);
+      if (activePage.startsWith('team-') && Number(activePage.split('-')[1])>count) activePage='experiment';
+      renderPages(); showPage(activePage); queuePromptRefresh();
+      renderForumBar();
+    });
+    artworkSize.addEventListener('input',()=>{
+      document.querySelectorAll('.team-page').forEach(refreshReferencePreview); queuePromptRefresh();
+    });
+    agentStepSize.addEventListener('input',()=>{ updateForumBar(); queuePromptRefresh(); });
+    personalHistoryEnabled.addEventListener('change',()=>queuePromptRefresh());
+    forumEnabled.addEventListener('change',()=>{ updateForumBar(); queuePromptRefresh(); });
+    publicForumEnabled.addEventListener('change',()=>{ updateForumBar(); queuePromptRefresh(); });
+    promptTemplatePreset.addEventListener('change',()=>{
+      const record=promptTemplateRecords[promptTemplatePreset.value];
+      if (!record) return;
+      promptTemplateEditor.value=record.template; updatePromptTemplateDescription(); queuePromptRefresh(); queueSettingsSave();
+    });
+    promptTemplateEditor.addEventListener('input',()=>{ queuePromptRefresh(); queueSettingsSave(); });
+    reloadPromptTemplate.onclick=()=>{
+      const record=promptTemplateRecords[promptTemplatePreset.value];
+      if (!record) return;
+      promptTemplateEditor.value=record.template; updatePromptTemplateDescription(); queuePromptRefresh(); queueSettingsSave();
+    };
+    savePromptTemplate.onclick=()=>{
+      const requested=window.prompt('Name this prompt template:','My prompt');
+      const name=requested?.trim(); if (!name) return;
+      const id=`custom_${Date.now()}`;
+      const record={id,name,description:'Saved in this browser.',template:promptTemplateEditor.value};
+      const library=customPromptLibrary(); library[id]=record;
+      try { localStorage.setItem(PROMPT_LIBRARY_KEY,JSON.stringify(library)); } catch (_) {}
+      promptTemplateRecords[id]=record; renderPromptTemplateOptions(id); promptTemplateEditor.value=record.template;
+      queuePromptRefresh(); saveSettingsNow();
+    };
+    restoreDefaults.onclick=async()=>{
+      error.textContent='';
+      try { localStorage.removeItem(SETTINGS_KEY); await loadAgentDefaults(true); agentStatus.textContent='Default experiment settings restored.'; }
+      catch (reason) { error.textContent=reason.message; }
+    };
+    document.querySelector('.sidebar').addEventListener('input',queueSettingsSave);
+    document.querySelector('.sidebar').addEventListener('change',queueSettingsSave);
+    resizeGrid.onclick=async()=>{
+      const requested=Number(gridSize.value);
+      resizeGrid.disabled=true; error.textContent='';
+      try {
+        const response=await fetch('/api/resize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({size:requested})});
+        const result=await response.json(); if (!response.ok) throw new Error(result.error||response.statusText);
+        state=result.state; displayedGridSize=0; setDimensions(); makePalette(); render(); await refreshAllPrompts();
+      } catch (reason) { error.textContent=reason.message; gridSize.value=state.width; }
+      finally { resizeGrid.disabled=false; }
+    };
+    function loadImage(url) {
+      return new Promise((resolve,reject)=>{ const image=new Image(); image.onload=()=>resolve(image); image.onerror=()=>reject(new Error(`Could not load snapshot ${url}`)); image.src=url+'?v='+Date.now(); });
+    }
+    async function buildRunVideo(snapshotUrls, runId) {
+      if (!snapshotUrls.length || !HTMLCanvasElement.prototype.captureStream || !window.MediaRecorder) throw new Error('This browser cannot build the run video.');
+      const first=await loadImage(snapshotUrls[0]);
+      const stage=document.createElement('canvas'); stage.width=first.naturalWidth; stage.height=first.naturalHeight;
+      const stageContext=stage.getContext('2d');
+      const stream=stage.captureStream(0), videoTrack=stream.getVideoTracks()[0];
+      const preferred='video/webm;codecs=vp9';
+      const options=MediaRecorder.isTypeSupported(preferred)?{mimeType:preferred}:{mimeType:'video/webm'};
+      const videoRecorder=new MediaRecorder(stream,options), chunks=[];
+      videoRecorder.ondataavailable=event=>{ if (event.data.size) chunks.push(event.data); };
+      const stopped=new Promise((resolve,reject)=>{ videoRecorder.onstop=resolve; videoRecorder.onerror=()=>reject(new Error('Browser video encoding failed.')); });
+      videoRecorder.start(200);
+      for (let index=0; index<snapshotUrls.length; index++) {
+        const image=index===0?first:await loadImage(snapshotUrls[index]);
+        stageContext.drawImage(image,0,0,stage.width,stage.height);
+        if (videoTrack.requestFrame) videoTrack.requestFrame();
+        await new Promise(resolve=>setTimeout(resolve,snapshotUrls.length===1?1000:650));
+      }
+      videoRecorder.stop(); await stopped;
+      stream.getTracks().forEach(track=>track.stop());
+      const blob=new Blob(chunks,{type:'video/webm'});
+      const response=await fetch(`/api/run-video?run_id=${encodeURIComponent(runId)}`,{method:'POST',headers:{'Content-Type':'video/webm'},body:blob});
+      const result=await response.json();
+      if (!response.ok) throw new Error(result.error || response.statusText);
+      return result.video_url;
+    }
+    function resetRunButton() {
+      activeRunToken=null; cancellationRequested=false; runAgent.disabled=false; runAgent.textContent='Run experiment'; runAgent.classList.remove('cancel'); resumeRun.disabled=false;
+    }
+    async function refreshResumeButton() {
+      try {
+        const response=await fetch('/api/resumable-run',{cache:'no-store'});
+        const info=await response.json(); if (!response.ok) throw new Error(info.error||response.statusText);
+        resumableRunInfo=info.available?info:null;
+        resumeRun.hidden=!resumableRunInfo;
+        resumeRun.disabled=Boolean(activeRunToken);
+        if (resumableRunInfo) {
+          const saved=resumableRunInfo.saved_next_round_responses?` · reuse ${resumableRunInfo.saved_next_round_responses} saved`:'';
+          resumeRun.textContent=`Resume after round ${resumableRunInfo.last_completed_round} of ${resumableRunInfo.max_steps}${saved}`;
+        }
+      } catch (_) {
+        resumableRunInfo=null; resumeRun.hidden=true;
+      }
+    }
+    async function presentRunResult(result) {
+      if (result.forum_events) { forumEvents=result.forum_events; renderForumBar(); }
+      activeRunToken=null; cancellationRequested=false; runAgent.disabled=true; runAgent.textContent='Saving video…'; runAgent.classList.remove('cancel'); lastCompletedRun=result.run_id;
+      lastCompletedTeamCount=result.competing_teams||1;
+      document.querySelector('#agent-output').src=result.output_url+'?v='+Date.now();
+      document.querySelector('#result-steps').textContent=result.rounds;
+      document.querySelector('#result-calls').textContent=result.calls;
+      document.querySelector('#result-pixels').textContent=result.filled;
+      document.querySelector('#result-cost').textContent=result.usage.cost==null?'—':'$'+Number(result.usage.cost).toFixed(6);
+      document.querySelector('#result-input').textContent=result.usage.prompt_tokens??'—';
+      document.querySelector('#result-output').textContent=result.usage.completion_tokens??'—';
+      document.querySelector('#result-stop').textContent=result.stop_reason;
+      agentResult.hidden=false; storeReference.hidden=lastCompletedTeamCount!==1; agentStatus.textContent='Building video…';
+      const videoLink=document.querySelector('#result-video');
+      try {
+        videoLink.href=await buildRunVideo(result.snapshot_urls,result.run_id);
+        videoLink.hidden=false; agentStatus.textContent=`Run saved · ${result.stop_reason} · ${result.rounds} round${result.rounds===1?'':'s'} · ${result.calls} calls`;
+      } catch (videoError) {
+        agentStatus.textContent='Run complete · video failed';
+        error.textContent=videoError.message;
+      }
+    }
+    runAgent.onclick=async()=>{
+      if (activeRunToken) {
+        if (cancellationRequested) return;
+        cancellationRequested=true; runAgent.disabled=true; runAgent.textContent='Cancelling…'; agentStatus.textContent='Cancelling after the current round…';
+        try {
+          const response=await fetch('/api/cancel-run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({run_token:activeRunToken})});
+          const result=await response.json(); if (!response.ok) throw new Error(result.error||response.statusText);
+          agentStatus.textContent=result.message;
+        } catch (reason) {
+          cancellationRequested=false; runAgent.disabled=false; runAgent.textContent='Cancel run'; error.textContent=reason.message;
+        }
+        return;
+      }
+      const runToken=crypto.randomUUID?crypto.randomUUID():`run_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      saveSettingsNow();
+      activeRunToken=runToken; runAgent.textContent='Cancel run'; runAgent.classList.add('cancel'); resumeRun.disabled=true;
+      agentStatus.textContent='Running model…'; agentResult.hidden=true; error.textContent=''; lastCompletedRun=null;
+      forumEvents=[]; updateForumBar();
+      storeReference.hidden=true; storeReference.disabled=false; storeReference.textContent='Store as reference';
+      const videoLink=document.querySelector('#result-video'); videoLink.hidden=true; videoLink.removeAttribute('href');
+      try {
+        const configuredTeams=collectTeams(); lastCompletedTeamCount=configuredTeams.length;
+        const payload={run_token:runToken,teams:configuredTeams,artwork_size:Number(artworkSize.value),personal_history_enabled:personalHistoryEnabled.checked,forum_enabled:forumEnabled.checked,public_forum_enabled:publicForumEnabled.checked,prompt_template_id:promptTemplatePreset.value,prompt_template:promptTemplateEditor.value,step_size:Number(agentStepSize.value),max_steps:Number(agentMaxSteps.value),clear_first:document.querySelector('#clear-first').checked,parameters:{temperature:Number(agentTemperature.value),max_tokens:Number(agentMaxTokens.value)}};
+        const response=await fetch('/api/run-agent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        const result=await response.json(); if (!response.ok) throw new Error(result.error || response.statusText);
+        await presentRunResult(result);
+      } catch (reason) { agentStatus.textContent='Run failed'; error.textContent=reason.message; }
+      finally { resetRunButton(); await refreshResumeButton(); }
+    };
+    resumeRun.onclick=async()=>{
+      if (activeRunToken || !resumableRunInfo) return;
+      const runToken=crypto.randomUUID?crypto.randomUUID():`run_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const runId=resumableRunInfo.run_id;
+      activeRunToken=runToken; runAgent.textContent='Cancel run'; runAgent.classList.add('cancel'); resumeRun.disabled=true;
+      agentStatus.textContent=`Restoring ${runId} and continuing…`; agentResult.hidden=true; error.textContent=''; lastCompletedRun=null;
+      storeReference.hidden=true; storeReference.disabled=false; storeReference.textContent='Store as reference';
+      const videoLink=document.querySelector('#result-video'); videoLink.hidden=true; videoLink.removeAttribute('href');
+      try {
+        const response=await fetch('/api/resume-run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({run_id:runId,run_token:runToken})});
+        const result=await response.json(); if (!response.ok) throw new Error(result.error||response.statusText);
+        await presentRunResult(result);
+      } catch (reason) { agentStatus.textContent='Resume failed'; error.textContent=reason.message; }
+      finally { resetRunButton(); await refreshResumeButton(); }
+    };
+    storeReference.onclick=async()=>{
+      if (!lastCompletedRun) return;
+      storeReference.disabled=true; storeReference.textContent='Storing…'; error.textContent='';
+      try {
+        const response=await fetch('/api/store-reference',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({run_id:lastCompletedRun})});
+        const result=await response.json(); if (!response.ok) throw new Error(result.error||response.statusText);
+        objectDefaults[result.tag]=result.object;
+        syncTeamConfigs(); teamConfigs[0].preset=result.tag; teamConfigs[0].subject=result.object.name; teamConfigs[0].description=result.object.description; teamConfigs[0].use_reference=true;
+        activePage='team-1'; renderPages(); showPage(activePage); await refreshPrompt(0); saveSettingsNow(); storeReference.textContent='Stored as reference';
+      } catch (reason) { storeReference.disabled=false; storeReference.textContent='Store as reference'; error.textContent=reason.message; }
+    };
+    function maybeFinishRecording() {
+      if (!recorder || recorder.state!=='recording' || recordingFinishing) return;
+      if (state.pixels.flat().every(Boolean)) { recordingFinishing=true; setTimeout(()=>recorder.stop(),600); }
+    }
+    addEventListener('resize',resize); Promise.all([loadState(),loadAgentDefaults(),refreshResumeButton()]).then(()=>{ resize(); connect(); startMappingRecording(); }).catch(reason=>error.textContent=reason.message);
+  </script>
+</body>
+</html>

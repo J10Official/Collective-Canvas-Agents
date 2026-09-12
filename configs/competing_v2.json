@@ -1,0 +1,106 @@
+{
+  "prompt_version": "V2",
+  "batch_scope": {
+    "unit": "15 competing matches",
+    "repetitions_per_condition": 5,
+    "stop_batch_after_cost_usd": 15.0
+  },
+  "conditions": [
+    {
+      "name": "four_heterogeneous_teams",
+      "members": "Each team contains GLM, Gemini, Qwen, and Luna."
+    },
+    {
+      "name": "all_gemini",
+      "members": "All four members of all four teams are Gemini."
+    },
+    {
+      "name": "homogeneous_family_per_team",
+      "members": "Each team contains four agents from one model family; family-to-object assignments rotate by repetition."
+    }
+  ],
+  "models": {
+    "GLM": {
+      "model": "z-ai/glm-5.3-flash",
+      "provider": "streamlake/fp8"
+    },
+    "Gemini": {
+      "model": "google/gemini-3.8-flash",
+      "provider": "google-ai-studio/flex"
+    },
+    "Qwen": {
+      "model": "qwen/qwen3.8-27b",
+      "provider": "reka/fp8"
+    },
+    "Luna": {
+      "model": "openai/gpt-5.6-luna",
+      "provider": "openai/flex"
+    },
+    "allow_provider_fallbacks": false
+  },
+  "task": {
+    "team_objects": [
+      "apple",
+      "orange",
+      "lemon",
+      "eggplant"
+    ],
+    "canvas_size": 32,
+    "maximum_artwork_size": 16,
+    "attach_reference_images": true,
+    "initial_canvas": "blank",
+    "placement": "unrestricted",
+    "teams": 4,
+    "members_per_team": 4,
+    "base_members": [
+      "GLM",
+      "Gemini",
+      "Qwen",
+      "Luna"
+    ],
+    "rotate_member_1": true
+  },
+  "protocol": {
+    "prompt_name": "V2a public forum recommendations",
+    "prompt_id": "forum_suggestions_v2a",
+    "team_forum": true,
+    "public_forum": true,
+    "personal_edit_history": true,
+    "round_0_member_1_turn": true,
+    "configured_rounds": 20,
+    "maximum_pixels_per_turn": 8,
+    "stop_when_every_member_returns_empty": true,
+    "stop_when_stalled": true
+  },
+  "generation": {
+    "reasoning": "low",
+    "reasoning_budget": 1000,
+    "temperature": 0.2,
+    "maximum_output_tokens": 8192
+  },
+  "execution": {
+    "runs_at_once": 5,
+    "maximum_requests_per_provider": 100,
+    "agents_within_each_round": "parallel",
+    "apply_responses": "completion_order",
+    "match_order": "randomized",
+    "randomization_seed": 20260912,
+    "resume_interrupted_runs": true,
+    "continue_batch_after_failed_run": true,
+    "retry_policy": "existing_harness_policy"
+  },
+  "outputs": {
+    "directory": "harness/batches/competing_v2",
+    "save_every_snapshot": true,
+    "save_final_png": true,
+    "save_webm_video": false,
+    "defer_video_generation": true,
+    "save_prompts": true,
+    "save_request_json": true,
+    "save_input_images": true,
+    "save_raw_responses": true,
+    "save_parsed_actions": true,
+    "save_usage_and_cost": true,
+    "save_terminal_log": true
+  }
+}

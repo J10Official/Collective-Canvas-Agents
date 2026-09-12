@@ -1,0 +1,13 @@
+{
+  "planned": 165,
+  "complete": 160,
+  "conditions": 33,
+  "figures": [
+    "figure_1_system.png",
+    "figure_2_task_prompt_outcomes.png",
+    "figure_3_configuration_heatmap.png",
+    "figure_4_communication_conflict.png",
+    "figure_5_progress.png",
+    "figure_6_representative_canvases.png"
+  ]
+}
